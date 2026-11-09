@@ -128,6 +128,12 @@ That file contains the PIN in plain text and is git-ignored.
 - Hub → WebDesk: the same JSON the firmware sends on its ext-UDP port (`msg`, `pos`, `tele`, `ack`).
 - WebDesk → node: `msg` becomes a BLE text frame (`0xA0`); text starting with `--` runs as a console command.
 
+## License
+
+© 2026 Ralf Altenbrand (DH1FR) · All rights reserved. Free for **licensed radio amateurs** for
+**private, non-commercial use**; commercial use needs written permission. Same terms as
+MeshcomWebDesk. Provided without warranty, **use at your own risk**. See [LICENSE](LICENSE).
+
 ## Credits
 
 [MeshCom firmware](https://github.com/icssw-org/MeshCom-Firmware) (protocol reference) and
