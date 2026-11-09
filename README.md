@@ -138,3 +138,5 @@ MeshcomWebDesk. Provided without warranty, **use at your own risk**. See [LICENS
 
 [MeshCom firmware](https://github.com/icssw-org/MeshCom-Firmware) (protocol reference) and
 [MeshcomWebDesk](https://github.com/DH1FR/MeshcomWebDesk) (the client this hub was built for).
+Protocols, data tables and dependencies are listed in [NOTICE.md](NOTICE.md), including the MIT license
+text of the MeshCom firmware.

@@ -138,3 +138,5 @@ Bedingungen wie MeshcomWebDesk. Ohne Gewährleistung, Benutzung **auf eigene Gef
 
 [MeshCom-Firmware](https://github.com/icssw-org/MeshCom-Firmware) (Protokollvorlage) und
 [MeshcomWebDesk](https://github.com/DH1FR/MeshcomWebDesk) (der Client, für den dieser Hub gebaut wurde).
+Verwendete Protokolle, Tabellen und Abhängigkeiten stehen in [NOTICE.md](NOTICE.md), samt MIT-Lizenztext
+der MeshCom-Firmware.
