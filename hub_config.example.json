@@ -1,0 +1,10 @@
+{
+  "address": "AA:BB:CC:DD:EE:FF",
+  "label": "MC-xxxx-CALL",
+  "pin": 0,
+  "udp_port": 1798,
+  "peer": "127.0.0.1:1799",
+  "console_port": 2323,
+  "console_host": "127.0.0.1",
+  "console_password": ""
+}
