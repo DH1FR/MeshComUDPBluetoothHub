@@ -28,6 +28,7 @@ Brücke:
 - Nachrichten in beide Richtungen, mit Echo des Nodes und Zustellquittungen (die Haken in WebDesk)
 - Positionen (`pos`) und Sensor-Telemetrie (`tele`) gehörter Stationen
 - Emulation der WebDesk-**NET Console** (HMAC-SHA256-Challenge/Response wie in der Firmware)
+  - `--help` beantwortet der Hub mit einer kurzen Befehlsliste und einem Hinweis (der Node gibt seine Hilfe nur über USB aus)
   - `--mheard` / `--mh` werden aus den BLE-MH-Frames des Nodes beantwortet, im `[MH] key=value`-Format der Firmware
   - andere `--Befehle` gehen per BLE an den Node (siehe Einschränkungen)
 - Optionales Monitor-Fenster (`--gui`): Node aus einer Liste der Nodes in der Nähe wählen, Live-Anzeige von
@@ -102,7 +103,7 @@ Diese Datei enthält die PIN im Klartext und ist per `.gitignore` ausgeschlossen
 
 - **Konsolenausgabe:** Die Firmware schickt nur einen Teil der Befehlsantworten über BLE. `--help`, `--info`
   und die meisten Textausgaben gehen nur an die serielle USB-Schnittstelle und erscheinen deshalb nicht in der
-  NET Console. `--mheard` beantwortet der Hub aus den MH-Frames; es enthält **keine Positionen**
+  NET Console. `--help` beantwortet der Hub selbst mit einer kurzen Liste und diesem Hinweis. `--mheard` beantwortet der Hub aus den MH-Frames; es enthält **keine Positionen**
   (`lat/lon/alt = NA`).
 - RSSI/SNR von Nachrichten und Positionen stammen aus dem letzten MHeard-Eintrag der Station (0, wenn
   unbekannt); die BLE-Frames tragen sie nicht.

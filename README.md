@@ -29,6 +29,7 @@ the gap:
   (the ticks in WebDesk)
 - Positions (`pos`) and sensor telemetry (`tele`) of heard stations
 - WebDesk **NET console** emulation (HMAC-SHA256 challenge/response, same as the firmware)
+  - `--help` answered by the hub with a short command list and a hint (the node sends its help on USB only)
   - `--mheard` / `--mh` answered from the node's BLE MH frames, in the firmware's `[MH] key=value` format
   - other `--commands` are sent to the node over BLE (see limitations)
 - Optional monitor window (`--gui`): pick the node from a list of nearby nodes, live view of
@@ -103,6 +104,7 @@ That file contains the PIN in plain text and is git-ignored.
 
 - **Console output:** the firmware sends only some command replies over BLE. `--help`, `--info`
   and most text output go to the USB serial port only, so they do not appear in the NET console.
+  The hub answers `--help` itself with a short list and this hint.
   `--mheard` is answered by the hub from the MH frames; it has **no positions** (`lat/lon/alt = NA`).
 - RSSI/SNR of messages and positions come from the last MHeard entry of that station (0 if unknown);
   BLE frames do not carry them.
