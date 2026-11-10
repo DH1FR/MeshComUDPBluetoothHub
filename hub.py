@@ -73,9 +73,14 @@ class UdpSide(asyncio.DatagramProtocol):
         self.hub = hub
         self.transport = None
         self.peer = hub.default_peer  # WebDesk address; learned from its packets
+        self.last_rx = None           # time.monotonic() of last datagram from WebDesk
+        self.rx_count = 0
 
     def connection_made(self, transport):
         self.transport = transport
+
+    def error_received(self, exc):
+        pass  # e.g. WebDesk not running: ignore
 
     def datagram_received(self, data, addr):
         try:
@@ -83,6 +88,8 @@ class UdpSide(asyncio.DatagramProtocol):
         except ValueError:
             emit("UDP", f"invalid JSON from {addr}")
             return
+        self.last_rx = time.monotonic()
+        self.rx_count += 1
         if self.peer != addr:
             self.peer = addr
             self.hub.remember_peer(addr)
@@ -125,6 +132,8 @@ class Hub:
         if self.client and self.client.is_connected:
             emit("RAW", f"TX {frame.hex(' ')}")
             await self.client.write_gatt_char(NUS_RX, frame, response=False)
+        else:
+            emit("SYS", "not connected - message not sent to node")
 
     def on_notify(self, _char, data: bytearray):
         data = bytes(data)
@@ -422,6 +431,15 @@ class Hub:
         _, self.udp = await self.loop.create_datagram_endpoint(
             lambda: UdpSide(self), local_addr=("0.0.0.0", self.args.udp_port))
         emit("SYS", f"UDP listening on :{self.args.udp_port}")
+        if sys.platform == "win32":
+            # Windows reports ICMP "port unreachable" (WebDesk not running) as WinError 10054 on the
+            # receive side and the proactor loop then stops receiving; switch that off.
+            try:
+                import socket
+                sock = self.udp.transport.get_extra_info("socket")
+                sock.ioctl(socket.SIO_UDP_CONNRESET, False)
+            except Exception as e:
+                emit("SYS", f"could not disable UDP connreset: {e!r}")
         await self.start_console()
         if self.target is None and self.args.name and not self.args.gui:
             self.target = await self.find_by_name(self.args.name)
@@ -492,6 +510,8 @@ def run_gui(hub: "Hub", cfg: dict):
     conn_btn.pack(side="left", padx=8)
     state_lbl = ttk.Label(top, text="disconnected", foreground="#b00020")
     state_lbl.pack(side="left", padx=4)
+    wd_lbl = ttk.Label(top, text="WebDesk: no contact", foreground="#b00020")
+    wd_lbl.pack(side="left", padx=12)
 
     # --- filters
     bar = ttk.Frame(root, padding=(4, 0))
@@ -630,6 +650,14 @@ def run_gui(hub: "Hub", cfg: dict):
                     box.see("end")
         except queue.Empty:
             pass
+        u = hub.udp
+        if u is not None and u.last_rx is not None:
+            age = int(time.monotonic() - u.last_rx)
+            con = " + NET console" if hub.console_writer else ""
+            wd_lbl.config(text=f"WebDesk: UDP {age}s ago ({u.rx_count} pkts){con}",
+                          foreground="#0a7d28" if age < 120 else "#b36b00")
+        elif hub.console_writer:
+            wd_lbl.config(text="WebDesk: NET console only", foreground="#b36b00")
         root.after(100, poll)
 
     threading.Thread(target=lambda: asyncio.run(hub.run()), daemon=True).start()
