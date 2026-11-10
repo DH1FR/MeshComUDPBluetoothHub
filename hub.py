@@ -66,6 +66,23 @@ def log_frame(data: bytes):
     emit("RAW", f"{kind:4} len={len(data):3} {data.hex(' ')}  {printable}")
 
 
+HELP_LINES = [
+    # WebDesk's help popup shows only lines that start with "--", are empty or contain
+    # "commands" - keep every line in that shape.
+    "-- MeshCom BLE hub: the node does not send its --help over Bluetooth (USB serial only).",
+    "-- Available commands handled by the hub itself:",
+    "--help           this text",
+    "--mheard, --mh   heard list from the node's BLE MH frames (no lat/lon/alt)",
+    "-- Every other --command is sent to the node over BLE, e.g.:",
+    "--gps on|off     GPS on / off",
+    "--sendpos        send position now",
+    "--btcode NNNNNN  set BLE PIN (0 = off)",
+    "-- The node answers only commands it replies to over BLE; others run silently,",
+    "-- output like --info is visible on USB only.",
+    "-- Full list of commands: https://github.com/icssw-org/MeshCom-Firmware",
+]
+
+
 class UdpSide(asyncio.DatagramProtocol):
     """ext-UDP emulation. Stage 1: remember WebDesk peer, forward msg to BLE."""
 
@@ -313,6 +330,13 @@ class Hub:
             # same data, so answer from them (lat/lon/alt are not in the BLE frames).
             emit("CMD", f"> {text}")
             for line in self.mheard_lines():
+                emit("CMD", line)
+                self.console_write(line)
+            return
+        if text.strip().lower() in ("--help", "--h", "--?"):
+            # The firmware prints its help on USB only, so answer here with a hint.
+            emit("CMD", f"> {text}")
+            for line in HELP_LINES:
                 emit("CMD", line)
                 self.console_write(line)
             return
