@@ -88,6 +88,33 @@ HELP_LINES = [
 ]
 
 
+def make_udp_socket(port: int):
+    """Non-blocking UDP socket on all interfaces.
+
+    Windows reports ICMP "port unreachable" (e.g. WebDesk not running yet) as WSAECONNRESET on the
+    receive side, and asyncio's proactor loop then stops receiving for good. Switch that off with
+    WSAIoctl(SIO_UDP_CONNRESET) - Python's socket module has no constant or ioctl for it.
+    """
+    import socket
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    if sys.platform == "win32":
+        try:
+            import ctypes
+            SIO_UDP_CONNRESET = 0x9800000C
+            flag = ctypes.c_ulong(0)
+            ret = ctypes.c_ulong(0)
+            r = ctypes.windll.ws2_32.WSAIoctl(
+                ctypes.c_size_t(sock.fileno()), SIO_UDP_CONNRESET,
+                ctypes.byref(flag), ctypes.sizeof(flag), None, 0, ctypes.byref(ret), None, None)
+            if r != 0:
+                emit("SYS", f"could not disable UDP connreset (WSAIoctl error {ctypes.windll.ws2_32.WSAGetLastError()})")
+        except Exception as e:
+            emit("SYS", f"could not disable UDP connreset: {e!r}")
+    sock.setblocking(False)
+    sock.bind(("0.0.0.0", port))
+    return sock
+
+
 class UdpSide(asyncio.DatagramProtocol):
     """ext-UDP emulation. Stage 1: remember WebDesk peer, forward msg to BLE."""
 
@@ -102,7 +129,7 @@ class UdpSide(asyncio.DatagramProtocol):
         self.transport = transport
 
     def error_received(self, exc):
-        pass  # e.g. WebDesk not running: ignore
+        emit("SYS", f"UDP error: {exc!r}")
 
     def datagram_received(self, data, addr):
         try:
@@ -457,18 +484,9 @@ class Hub:
 
     async def run(self):
         self.loop = asyncio.get_running_loop()
-        _, self.udp = await self.loop.create_datagram_endpoint(
-            lambda: UdpSide(self), local_addr=("0.0.0.0", self.args.udp_port))
+        sock = make_udp_socket(self.args.udp_port)
+        _, self.udp = await self.loop.create_datagram_endpoint(lambda: UdpSide(self), sock=sock)
         emit("SYS", f"UDP listening on :{self.args.udp_port}")
-        if sys.platform == "win32":
-            # Windows reports ICMP "port unreachable" (WebDesk not running) as WinError 10054 on the
-            # receive side and the proactor loop then stops receiving; switch that off.
-            try:
-                import socket
-                sock = self.udp.transport.get_extra_info("socket")
-                sock.ioctl(socket.SIO_UDP_CONNRESET, False)
-            except Exception as e:
-                emit("SYS", f"could not disable UDP connreset: {e!r}")
         await self.start_console()
         if self.target is None and self.args.name and not self.args.gui:
             self.target = await self.find_by_name(self.args.name)
