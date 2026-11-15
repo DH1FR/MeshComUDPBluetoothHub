@@ -30,9 +30,12 @@ Brücke:
 - Emulation der WebDesk-**NET Console** (HMAC-SHA256-Challenge/Response wie in der Firmware)
   - `--help` beantwortet der Hub mit einer kurzen Befehlsliste und einem Hinweis (der Node gibt seine Hilfe nur über USB aus)
   - `--mheard` / `--mh` werden aus den BLE-MH-Frames des Nodes beantwortet, im `[MH] key=value`-Format der Firmware
+  - `--info` und `--pos` werden aus den BLE-Statusframes des Nodes beantwortet (die Firmware gibt sie nur über USB aus)
   - andere `--Befehle` gehen per BLE an den Node (siehe Einschränkungen)
 - Optionales Monitor-Fenster (`--gui`): Node aus einer Liste der Nodes in der Nähe wählen, Live-Anzeige von
   Nachrichten, Positionen, Quittungen und MHeard, Befehlszeile, Knöpfe für *GPS an/aus* und *Position senden*
+- Statusleiste: Batteriesymbol mit Füllstand, GPS-Status, Satelliten (Balkenanzeige), eigene Position und Sensorwerte
+- Die eigene Position des Nodes geht an WebDesk (`src_type: "node"`)
 - Merkt sich Node, PIN und die Adresse von WebDesk
 - Läuft unter **Windows** (WinRT) und **Linux / Raspberry Pi** (BlueZ) über [bleak](https://github.com/hbldh/bleak)
 
@@ -107,8 +110,10 @@ Diese Datei enthält die PIN im Klartext und ist per `.gitignore` ausgeschlossen
   (`lat/lon/alt = NA`).
 - RSSI/SNR von Nachrichten und Positionen stammen aus dem letzten MHeard-Eintrag der Station (0, wenn
   unbekannt); die BLE-Frames tragen sie nicht.
-- Noch nicht umgesetzt: eigene Position/Telemetrie des Nodes als `src_type:"node"`, Telemetrie von WebDesk
-  zum Node, ein UDP-Port-Feld im Fenster.
+- Die Satellitenbalken zeigen nur die Anzahl der Satelliten und den Fix; der Node schickt keine
+  Satellitendetails (Sky Plot) über Bluetooth.
+- Noch nicht umgesetzt: eigene Telemetrie des Nodes als `src_type:"node"` (der T114 hat keine Sensoren),
+  Telemetrie von WebDesk zum Node, ein UDP-Port-Feld im Fenster.
 - Nur ein BLE-Client gleichzeitig (Handy-App **oder** Hub).
 - Getestet mit Heltec T114, Firmware 4.40a, Windows 11. Auf einem Raspberry Pi noch nicht getestet.
 

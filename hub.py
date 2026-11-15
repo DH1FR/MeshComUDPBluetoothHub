@@ -66,6 +66,8 @@ def log_frame(data: bytes):
     emit("RAW", f"{kind:4} len={len(data):3} {data.hex(' ')}  {printable}")
 
 
+LOCAL_COMMANDS = ("--mheard", "--mh", "--help", "--h", "--?", "--info", "--pos")
+
 HELP_LINES = [
     # WebDesk's help popup shows only lines that start with "--", are empty or contain
     # "commands" - keep every line in that shape.
@@ -73,6 +75,8 @@ HELP_LINES = [
     "-- Available commands handled by the hub itself:",
     "--help           this text",
     "--mheard, --mh   heard list from the node's BLE MH frames (no lat/lon/alt)",
+    "--info           node info, built from the node's BLE status frames",
+    "--pos            GPS fix, satellites, position, beacon timing",
     "-- Every other --command is sent to the node over BLE, e.g.:",
     "--gps on|off     GPS on / off",
     "--sendpos        send position now",
@@ -176,6 +180,9 @@ class Hub:
         self.own_call = ""
         self.fw_str = ""
         self.batt = 0
+        self.status = {}      # TYP -> last JSON status frame from the node (I, SN, SE, G, W, ...)
+        self.status_ts = {}   # TYP -> time.monotonic() when received
+        self.own_pos_sent = None  # (lat, lon, monotonic) of the last own position given to WebDesk
 
     async def send(self, frame: bytes):
         if self.client and self.client.is_connected:
@@ -215,6 +222,11 @@ class Hub:
                 emit("SYS", f"Node {j.get('CALL')} FW {j.get('FWVER')} batt {j.get('BATP')}%")
             elif typ == "CONFFIN":
                 emit("SYS", "config burst complete")
+            if typ and typ not in ("MH", "CONFFIN"):
+                self.status[typ] = j
+                self.status_ts[typ] = time.monotonic()
+                if typ == "G":
+                    return self.own_pos_from_gps(j)
             return None
         if d[0] != 0x40 or len(d) < 2:
             return None  # 0x91 MH list etc.: not needed for ext-UDP
@@ -355,6 +367,138 @@ class Hub:
                 f"gw={'Y' if j.get('GW') else 'N'} lat=NA lon=NA alt=NAm")
         return out
 
+    # ---- node status (own position, battery, GPS, sensors) from the node's BLE JSON frames ----
+
+    SENSOR_KEYS = ("BME", "BMP", "BMP3", "AHT", "680", "811", "SS", "LPS33", "OW", "SHT")
+
+    def has_sensors(self) -> bool:
+        return any(self.status.get(t, {}).get(k) for t in ("SE", "S1") for k in self.SENSOR_KEYS)
+
+    @staticmethod
+    def fmt_pos(lat, lon):
+        return f"{abs(lat):.4f}{'N' if lat >= 0 else 'S'} {abs(lon):.4f}{'E' if lon >= 0 else 'W'}"
+
+    def age_text(self, typ):
+        ts = self.status_ts.get(typ)
+        if ts is None:
+            return ""
+        age = int(time.monotonic() - ts)
+        return "" if age < 120 else f" ({age // 60} min old)"
+
+    def status_text(self) -> str:
+        """One line for the window's status bar."""
+        i, g, sn, w, ch = (self.status.get(k) for k in ("I", "G", "SN", "W", "IS2"))
+        if not self.status:
+            return "no node data yet"
+        parts = []
+        if i:
+            b = f"Batt {i.get('BATP', '--')}%"
+            if isinstance(i.get("BATV"), (int, float)):
+                b += f" {i['BATV']:.2f} V"
+            if ch and ch.get("CHG"):
+                b += f" {ch['CHG']}"
+            parts.append(b + self.age_text("I"))
+        else:
+            parts.append("Batt --")
+        gps_on = None if sn is None else bool(sn.get("GPS"))
+        gtxt = "GPS " + ("--" if gps_on is None else "on" if gps_on else "off")
+        if g:
+            gtxt += f"  {'fix' if g.get('SFIX') else 'no fix'}  {g.get('SAT', 0)} sat"
+            if g.get("HDOP"):
+                gtxt += f"  HDOP {g['HDOP']}"
+            gtxt += f"  {self.fmt_pos(g.get('LAT', 0), g.get('LON', 0))}  {g.get('ALT', 0)} m"
+            gtxt += self.age_text("G")
+        parts.append(gtxt)
+        if w and self.has_sensors():
+            s = f"T {w.get('TEMP', 0):.1f} C  H {w.get('HUM', 0):.0f} %  QNH {w.get('QNH', 0):.1f} hPa"
+            if w.get("TOUT"):
+                s += f"  Tout {w['TOUT']:.1f} C"
+            if w.get("GAS"):
+                s += f"  gas {w['GAS']}"
+            if w.get("CO2"):
+                s += f"  CO2 {w['CO2']}"
+            parts.append("Sensors: " + s + self.age_text("W"))
+        else:
+            parts.append("Sensors: none")
+        return "   |   ".join(parts)
+
+    def own_pos_from_gps(self, g):
+        """Own position as ext-UDP 'node' pos JSON (once, then when moved or every 30 min)."""
+        try:
+            lat, lon = float(g["LAT"]), float(g["LON"])
+        except (KeyError, TypeError, ValueError):
+            return None
+        if not g.get("SFIX") or (lat == 0 and lon == 0) or not self.own_call:
+            return None
+        now = time.monotonic()
+        last = self.own_pos_sent
+        if last and abs(lat - last[0]) < 0.0005 and abs(lon - last[1]) < 0.0005 and now - last[2] < 1800:
+            return None
+        self.own_pos_sent = (lat, lon, now)
+        sa, i = self.status.get("SA", {}), self.status.get("I", {})
+        sym, grp = sa.get("SYMCD") or "#", sa.get("SYMID") or "/"
+        fwv = str(i.get("FWVER", "")).split(" ")
+        t4 = lambda v: int(abs(v) * 10000) / 10000.0
+        emit("POS", f"{self.own_call} (own): {self.fmt_pos(lat, lon)} alt {g.get('ALT', 0)} m  [GPS frame]")
+        return {"src_type": "node", "type": "pos", "src": self.own_call, "msg": "",
+                "lat": t4(lat), "lat_dir": "N" if lat >= 0 else "S",
+                "long": t4(lon), "long_dir": "E" if lon >= 0 else "W",
+                "aprs_symbol": sym * 2 if sym == "\\" else sym,
+                "aprs_symbol_group": grp * 2 if grp == "\\" else grp,
+                "hw_id": i.get("HWID", 0), "msg_id": "00000000",
+                "alt": int(round(float(g.get("ALT", 0)) * 3.28084)),  # feet, like the position frames
+                "lora_mod": 0, "max_hop": 0, "batt": self.batt,
+                "firmware": self.fw_str or fwv[0], "fw_sub": fwv[1] if len(fwv) > 1 else "",
+                "rssi": 0, "snr": 0}
+
+    def info_lines(self):
+        i, sn, sn1, sa = (self.status.get(k) for k in ("I", "SN", "SN1", "SA"))
+        if not i:
+            return ["[hub] no node data yet - wait for the node's config frames"]
+        groups = ";".join(str(i.get("GCB%d" % n)) for n in range(6) if i.get("GCB%d" % n))
+        out = [f"[hub] Node {i.get('CALL')}  FW {i.get('FWVER')}  build {self.status.get('IS1', {}).get('BDATE', '?')}"
+               f"  HW id {i.get('HWID')}  country {i.get('CTRY')}",
+               f"[hub] Battery {i.get('BATP')} % / {i.get('BATV', 0):.2f} V (max {i.get('MAXV')} V)"
+               f"  BLE {i.get('BLE')}  groups {groups}"]
+        if sn:
+            out.append(f"[hub] LoRa {sn.get('MQRG')} MHz  SF{sn.get('MSF')} CR{sn.get('MCR')} BW{sn.get('MBW')}"
+                       f"  TX {sn.get('TXP')} dBm  UTC{sn.get('UTCOF', 0):+g}")
+            out.append(f"[hub] Gateway {'on' if sn.get('GW') else 'off'}  Mesh {'on' if sn.get('MSH') else 'off'}"
+                       f"  GPS {'on' if sn.get('GPS') else 'off'}  Track {'on' if sn.get('TRACK') else 'off'}"
+                       f"  Display {'on' if sn.get('DISP') else 'off'}")
+        if sn1:
+            out.append(f"[hub] Max hop {sn1.get('MHOP')}  MTU {sn1.get('MTU')}  Via {'on' if sn1.get('VIA') else 'off'}"
+                       f"  TZ {sn1.get('TZ') or '-'}")
+        if sa:
+            out.append(f"[hub] APRS symbol {sa.get('SYMID', '')}{sa.get('SYMCD', '')}  name '{sa.get('NAME', '')}'"
+                       f"  comment '{sa.get('ATXT', '')}'")
+        out += self.pos_lines()[:1]
+        out.append("[hub] Sensors: " + ("see status bar" if self.has_sensors() else "none"))
+        out.append("[hub] (built from the node's BLE status frames; the firmware prints --info on USB only)")
+        return out
+
+    def pos_lines(self):
+        g = self.status.get("G")
+        if not g:
+            return ["[hub] no GPS data yet"]
+        return [f"[hub] GPS {'fix' if g.get('SFIX') else 'no fix'}  {g.get('SAT', 0)} sat  HDOP {g.get('HDOP')}"
+                f"  {self.fmt_pos(g.get('LAT', 0), g.get('LON', 0))}  alt {g.get('ALT', 0)} m  {g.get('DATE', '')}",
+                f"[hub] position beacon every {g.get('RATE')} s, next in {g.get('NEXT')} s"]
+
+    async def refresh_status(self):
+        """Ask the node for fresh GPS (every 60 s), sensors (60 s, if any) and info (5 min)."""
+        n = 0
+        while self.client and self.client.is_connected:
+            await asyncio.sleep(60)
+            n += 1
+            if not (self.client and self.client.is_connected):
+                break
+            await self.send(text_frame("--pos"))
+            if self.has_sensors():
+                await self.send(text_frame("--weather"))
+            if n % 5 == 0:
+                await self.send(text_frame("--info"))
+
     async def command(self, text: str):
         """Run a console command on the node (BLE text starting with '--')."""
         if text.strip().lower() in ("--mheard", "--mh"):
@@ -362,6 +506,12 @@ class Hub:
             # same data, so answer from them (lat/lon/alt are not in the BLE frames).
             emit("CMD", f"> {text}")
             for line in self.mheard_lines():
+                emit("CMD", line)
+                self.console_write(line)
+            return
+        if text.strip().lower() in ("--info", "--pos"):
+            emit("CMD", f"> {text}")
+            for line in (self.info_lines() if text.strip().lower() == "--info" else self.pos_lines()):
                 emit("CMD", line)
                 self.console_write(line)
             return
@@ -432,7 +582,7 @@ class Hub:
                     continue
                 if not text.startswith("--"):
                     text = "--" + text
-                if text.lower() not in ("--mheard", "--mh") and not (
+                if text.lower() not in LOCAL_COMMANDS and not (
                         self.client and self.client.is_connected):
                     self.console_write("[hub] node not connected")
                     continue
@@ -508,8 +658,14 @@ class Hub:
                     await self.send(hello_frame(self.pin))
                     await asyncio.sleep(0.3)
                     await self.send(time_frame())
-                    while client.is_connected and self.target == addr:
-                        await asyncio.sleep(0.5)
+                    self.status.clear()
+                    self.status_ts.clear()
+                    refresher = asyncio.ensure_future(self.refresh_status())
+                    try:
+                        while client.is_connected and self.target == addr:
+                            await asyncio.sleep(0.5)
+                    finally:
+                        refresher.cancel()
             except Exception as e:  # reconnect loop
                 emit("SYS", f"BLE {e!r}")
             self.client = None
@@ -569,6 +725,43 @@ def run_gui(hub: "Hub", cfg: dict):
         v = tk.BooleanVar(value=default)
         show[k] = v
         tk.Checkbutton(bar, text=k, variable=v, fg=COLORS[k]).pack(side="left")
+    status_frame = ttk.Frame(root, relief="sunken", padding=(6, 2))
+    status_frame.pack(side="bottom", fill="x")
+    batt_canvas = tk.Canvas(status_frame, width=34, height=16, highlightthickness=0, bd=0)
+    batt_canvas.pack(side="left", padx=(0, 6))
+    sat_canvas = tk.Canvas(status_frame, width=70, height=16, highlightthickness=0, bd=0)
+    sat_canvas.pack(side="right", padx=(6, 0))
+    status_bar = ttk.Label(status_frame, text="no node data yet", anchor="w")
+    status_bar.pack(side="left", fill="x", expand=True)
+    batt_state = {"pct": "unset", "sat": "unset"}
+
+    def draw_sats(sat, fix):
+        """Satellite bars: one bar per satellite (max 16), green with a fix, amber without."""
+        c = sat_canvas
+        c.delete("all")
+        c.config(bg=str(root.cget("bg")))
+        n = max(0, min(16, int(sat or 0)))
+        on = "#2e9e46" if fix else "#e0a000"
+        for i in range(16):
+            h = 4 + int(10 * i / 15)
+            x = 2 + i * 4
+            c.create_rectangle(x, 15 - h, x + 2, 15, outline="", fill=on if i < n else "#d0d0d0")
+
+    def draw_battery(pct):
+        """Battery symbol: outline, fill level and colour by charge (green / amber / red)."""
+        c = batt_canvas
+        c.delete("all")
+        c.config(bg=str(root.cget("bg")))
+        edge = "#555555"
+        c.create_rectangle(1, 2, 29, 14, outline=edge, width=2)       # body
+        c.create_rectangle(30, 5, 33, 11, outline=edge, fill=edge)    # terminal
+        if isinstance(pct, (int, float)):
+            pct = max(0, min(100, pct))
+            colour = "#2e9e46" if pct >= 50 else "#e0a000" if pct >= 20 else "#c62828"
+            w = int(round(24 * pct / 100))
+            if w > 0:
+                c.create_rectangle(3, 4, 3 + w, 12, outline="", fill=colour)
+
     cmdbar = ttk.Frame(root, padding=4)
     cmdbar.pack(side="bottom", fill="x")
     box = scrolledtext.ScrolledText(root, font=("Consolas", 10), wrap="word")
@@ -697,6 +890,18 @@ def run_gui(hub: "Hub", cfg: dict):
                     box.see("end")
         except queue.Empty:
             pass
+        txt = hub.status_text()
+        if status_bar.cget("text") != txt:
+            status_bar.config(text=txt)
+        gps = hub.status.get("G") or {}
+        satkey = (gps.get("SAT"), bool(gps.get("SFIX")))
+        if batt_state["sat"] != satkey:
+            batt_state["sat"] = satkey
+            draw_sats(*satkey)
+        pct = (hub.status.get("I") or {}).get("BATP")
+        if batt_state["pct"] != pct:
+            batt_state["pct"] = pct
+            draw_battery(pct)
         u = hub.udp
         if u is not None and u.last_rx is not None:
             age = int(time.monotonic() - u.last_rx)

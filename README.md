@@ -31,9 +31,12 @@ the gap:
 - WebDesk **NET console** emulation (HMAC-SHA256 challenge/response, same as the firmware)
   - `--help` answered by the hub with a short command list and a hint (the node sends its help on USB only)
   - `--mheard` / `--mh` answered from the node's BLE MH frames, in the firmware's `[MH] key=value` format
+  - `--info` and `--pos` answered from the node's BLE status frames (the firmware prints them on USB only)
   - other `--commands` are sent to the node over BLE (see limitations)
 - Optional monitor window (`--gui`): pick the node from a list of nearby nodes, live view of
   messages, positions, acks and MHeard, command line, buttons for *GPS on/off* and *Send position*
+- Status bar: battery symbol with level, GPS state, satellites (bar graph), own position and sensor values
+- The node's own position is passed to WebDesk (`src_type: "node"`)
 - Remembers the node, PIN and WebDesk's address between runs
 - Runs on **Windows** (WinRT) and **Linux / Raspberry Pi** (BlueZ) via [bleak](https://github.com/hbldh/bleak)
 
@@ -108,8 +111,10 @@ That file contains the PIN in plain text and is git-ignored.
   `--mheard` is answered by the hub from the MH frames; it has **no positions** (`lat/lon/alt = NA`).
 - RSSI/SNR of messages and positions come from the last MHeard entry of that station (0 if unknown);
   BLE frames do not carry them.
-- Not implemented yet: the node's own position/telemetry as `src_type:"node"`, telemetry from WebDesk to
-  the node, a UDP-port field in the window.
+- The satellite bars show only the number of satellites and the fix; the node does not send per-satellite
+  data (sky plot) over Bluetooth.
+- Not implemented yet: the node's own telemetry as `src_type:"node"` (the T114 has no sensors), telemetry
+  from WebDesk to the node, a UDP-port field in the window.
 - One BLE client at a time (phone app **or** hub).
 - Tested with a Heltec T114, firmware 4.40a, Windows 11. Not yet tested on a Raspberry Pi.
 
