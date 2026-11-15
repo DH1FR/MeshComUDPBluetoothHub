@@ -20,6 +20,16 @@ the gap:
    (ext-UDP, NET console)  ◄──                            ◄──
 ```
 
+It is just as useful with **any other MeshCom node that has Bluetooth** (Heltec V3/V4, T-Beam,
+RAK4631, ...) if you cannot or do not want to use WiFi: on the road, in a hotel, portable, or
+because the node must not join your network. Notes:
+
+- **Tested only with the Heltec T114** (firmware 4.40a). Other nodes use the same BLE protocol,
+  so they should work, but that is an assumption.
+- Sensor telemetry of nodes that have sensors is forwarded to WebDesk, but untested (the T114 has none).
+- A node serves **one BLE client at a time**: while the hub is connected, the phone app cannot use the node.
+- The hub is **not an internet gateway**. Messages still go over LoRa to a gateway in range.
+
 > Unofficial community project. Not affiliated with or endorsed by the MeshCom project or the
 > WebDesk author. Built against MeshCom firmware **4.40a**.
 

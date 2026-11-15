@@ -20,6 +20,16 @@ Brücke:
   (Ext-UDP, NET Console)  ◄──                            ◄──
 ```
 
+Genauso nützlich ist er mit **jedem anderen MeshCom-Node mit Bluetooth** (Heltec V3/V4, T-Beam,
+RAK4631, ...), wenn man kein WLAN nutzen kann oder will: unterwegs, im Hotel, portabel oder weil der
+Node nicht ins eigene Netz soll. Hinweise:
+
+- **Nur mit dem Heltec T114 getestet** (Firmware 4.40a). Andere Nodes nutzen dasselbe BLE-Protokoll
+  und sollten funktionieren, das ist aber eine Annahme.
+- Sensor-Telemetrie von Nodes mit Sensoren geht an WebDesk, ist aber ungetestet (der T114 hat keine).
+- Ein Node bedient **jeweils einen BLE-Client**: Solange der Hub verbunden ist, kann die Handy-App den Node nicht nutzen.
+- Der Hub ist **kein Internet-Gateway**. Nachrichten laufen weiter über LoRa zu einem Gateway in Reichweite.
+
 > Inoffizielles Community-Projekt, nicht mit dem MeshCom-Projekt oder dem Autor von WebDesk
 > verbunden. Gebaut gegen die MeshCom-Firmware **4.40a**.
 
