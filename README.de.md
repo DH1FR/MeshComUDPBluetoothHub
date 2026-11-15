@@ -35,7 +35,8 @@ Brücke:
 - Optionales Monitor-Fenster (`--gui`): Node aus einer Liste der Nodes in der Nähe wählen, Live-Anzeige von
   Nachrichten, Positionen, Quittungen und MHeard, Befehlszeile, Knöpfe für *GPS an/aus* und *Position senden*
 - Statusleiste: Batteriesymbol mit Füllstand, GPS-Status, Satelliten (Balkenanzeige), eigene Position und Sensorwerte
-- Die eigene Position des Nodes geht an WebDesk (`src_type: "node"`)
+- Die eigene Position und, falls der Node Sensoren hat, seine eigene Telemetrie gehen an WebDesk (`src_type: "node"`)
+- Der UDP-Port des Hubs lässt sich im Fenster ohne Neustart ändern
 - Merkt sich Node, PIN und die Adresse von WebDesk
 - Läuft unter **Windows** (WinRT) und **Linux / Raspberry Pi** (BlueZ) über [bleak](https://github.com/hbldh/bleak)
 
@@ -112,8 +113,9 @@ Diese Datei enthält die PIN im Klartext und ist per `.gitignore` ausgeschlossen
   unbekannt); die BLE-Frames tragen sie nicht.
 - Die Satellitenbalken zeigen nur die Anzahl der Satelliten und den Fix; der Node schickt keine
   Satellitendetails (Sky Plot) über Bluetooth.
-- Noch nicht umgesetzt: eigene Telemetrie des Nodes als `src_type:"node"` (der T114 hat keine Sensoren),
-  Telemetrie von WebDesk zum Node, ein UDP-Port-Feld im Fenster.
+- Telemetrie von WebDesk zum Node ist nicht möglich: Die Firmware nimmt diese Werte nur über ihr eigenes
+  ext-UDP an, und Bluetooth kennt keinen Befehl, der sie setzt.
+- Die eigene Telemetrie des Nodes ist umgesetzt, aber ungetestet: der T114 hat keine Sensoren.
 - Nur ein BLE-Client gleichzeitig (Handy-App **oder** Hub).
 - Getestet mit Heltec T114, Firmware 4.40a, Windows 11. Auf einem Raspberry Pi noch nicht getestet.
 

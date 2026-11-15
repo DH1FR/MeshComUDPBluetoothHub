@@ -227,6 +227,11 @@ class Hub:
                 self.status_ts[typ] = time.monotonic()
                 if typ == "G":
                     return self.own_pos_from_gps(j)
+                if typ == "W" and self.own_call and self.has_sensors():
+                    return {"src_type": "node", "type": "tele", "src": self.own_call,
+                            "temp1": j.get("TEMP", 0), "temp2": j.get("TOUT", 0), "hum": j.get("HUM", 0),
+                            "qfe": j.get("PRES", 0), "qnh": j.get("QNH", 0),
+                            "gas": j.get("GAS", 0), "co2": j.get("CO2", 0)}
             return None
         if d[0] != 0x40 or len(d) < 2:
             return None  # 0x91 MH list etc.: not needed for ext-UDP
@@ -366,6 +371,26 @@ class Hub:
                 f"role={j.get('ROLE') or '-'} ex={j.get('EX', 0)} nb={j.get('NB', 0)} "
                 f"gw={'Y' if j.get('GW') else 'N'} lat=NA lon=NA alt=NAm")
         return out
+
+    async def rebind_udp(self, port: int):
+        """Listen on another UDP port without a restart; keeps the learned WebDesk peer."""
+        if self.udp is not None and port == self.args.udp_port:
+            return
+        try:
+            sock = make_udp_socket(port)
+        except OSError as e:
+            emit("SYS", f"UDP port {port} not available: {e}")
+            return
+        old = self.udp
+        peer = old.peer if old is not None else self.default_peer
+        if old is not None and old.transport is not None:
+            old.transport.close()
+        _, self.udp = await self.loop.create_datagram_endpoint(lambda: UdpSide(self), sock=sock)
+        self.udp.peer = peer
+        self.args.udp_port = port
+        emit("SYS", f"UDP listening on :{port}")
+        self.cfg["udp_port"] = port
+        save_config(self.cfg)
 
     # ---- node status (own position, battery, GPS, sensors) from the node's BLE JSON frames ----
 
@@ -691,7 +716,7 @@ def run_gui(hub: "Hub", cfg: dict):
 
     root = tk.Tk()
     root.title("MeshCom BLE <-> UDP Hub")
-    root.geometry("960x560")
+    root.geometry("1100x560")
 
     # --- connection bar
     top = ttk.Frame(root, padding=4)
@@ -713,6 +738,25 @@ def run_gui(hub: "Hub", cfg: dict):
     conn_btn.pack(side="left", padx=8)
     state_lbl = ttk.Label(top, text="disconnected", foreground="#b00020")
     state_lbl.pack(side="left", padx=4)
+    ttk.Label(top, text="UDP port:").pack(side="left", padx=(10, 2))
+    udp_var = tk.StringVar(value=str(hub.args.udp_port))
+    udp_entry = ttk.Entry(top, textvariable=udp_var, width=6)
+    udp_entry.pack(side="left")
+
+    def apply_udp_port(_e=None):
+        try:
+            port = int(udp_var.get())
+            if not 1 <= port <= 65535:
+                raise ValueError
+        except ValueError:
+            emit("SYS", "UDP port must be a number 1-65535")
+            udp_var.set(str(hub.args.udp_port))
+            return
+        if port != hub.args.udp_port and hub.loop is not None:
+            asyncio.run_coroutine_threadsafe(hub.rebind_udp(port), hub.loop)
+
+    udp_entry.bind("<Return>", apply_udp_port)
+    ttk.Button(top, text="Set", width=4, command=apply_udp_port).pack(side="left", padx=(2, 0))
     wd_lbl = ttk.Label(top, text="WebDesk: no contact", foreground="#b00020")
     wd_lbl.pack(side="left", padx=12)
 
