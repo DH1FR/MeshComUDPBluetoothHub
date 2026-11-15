@@ -33,6 +33,10 @@ because the node must not join your network. Notes:
 > Unofficial community project. Not affiliated with or endorsed by the MeshCom project or the
 > WebDesk author. Built against MeshCom firmware **4.40a**.
 
+![Hub window](docs/screenshot.png)
+
+*The hub window: node, UDP port and WebDesk address on top, log in the middle, status bar with battery, GPS and satellites at the bottom (own position and a third-party position blacked out).*
+
 ## Features
 
 - Messages in both directions, including the node's echo and delivery acknowledgements

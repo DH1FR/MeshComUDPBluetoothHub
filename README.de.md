@@ -33,6 +33,10 @@ Node nicht ins eigene Netz soll. Hinweise:
 > Inoffizielles Community-Projekt, nicht mit dem MeshCom-Projekt oder dem Autor von WebDesk
 > verbunden. Gebaut gegen die MeshCom-Firmware **4.40a**.
 
+![Hub-Fenster](docs/screenshot.png)
+
+*Das Hub-Fenster: oben Node, UDP-Port und WebDesk-Adresse, in der Mitte das Log, unten die Statusleiste mit Akku, GPS und Satelliten (eigene Position und die Position einer fremden Station geschwärzt).*
+
 ## Funktionen
 
 - Nachrichten in beide Richtungen, mit Echo des Nodes und Zustellquittungen (die Haken in WebDesk)
