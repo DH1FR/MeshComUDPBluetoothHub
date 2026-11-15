@@ -620,6 +620,13 @@ class Hub:
                 emit("SYS", "NET console client disconnected")
             writer.close()
 
+    def set_peer(self, addr):
+        """Set where WebDesk listens by hand (the hub also learns it from WebDesk's packets)."""
+        self.default_peer = addr
+        if self.udp is not None:
+            self.udp.peer = addr
+        self.remember_peer(addr)
+
     def remember_peer(self, addr):
         emit("SYS", f"WebDesk peer: {addr[0]}:{addr[1]}")
         self.cfg["peer"] = f"{addr[0]}:{addr[1]}"
@@ -716,7 +723,7 @@ def run_gui(hub: "Hub", cfg: dict):
 
     root = tk.Tk()
     root.title("MeshCom BLE <-> UDP Hub")
-    root.geometry("1100x560")
+    root.geometry("1300x560")
 
     # --- connection bar
     top = ttk.Frame(root, padding=4)
@@ -757,7 +764,38 @@ def run_gui(hub: "Hub", cfg: dict):
 
     udp_entry.bind("<Return>", apply_udp_port)
     ttk.Button(top, text="Set", width=4, command=apply_udp_port).pack(side="left", padx=(2, 0))
-    wd_lbl = ttk.Label(top, text="WebDesk: no contact", foreground="#b00020")
+    ttk.Label(top, text="WebDesk:").pack(side="left", padx=(12, 2))
+    peer_var = tk.StringVar()
+    peer_entry = ttk.Entry(top, textvariable=peer_var, width=17)
+    peer_entry.pack(side="left")
+    peer_shown = {"v": None}
+
+    def apply_peer(_e=None):
+        import ipaddress
+        txt = peer_var.get().strip()
+        try:
+            host, port = txt.rsplit(":", 1)
+            ipaddress.IPv4Address(host)
+            port = int(port)
+            if not 1 <= port <= 65535:
+                raise ValueError
+        except ValueError:
+            emit("SYS", "WebDesk address must be IP:port, e.g. 127.0.0.1:1799")
+            peer_shown["v"] = None  # show the current address again
+            return
+        hub.set_peer((host, port))
+        peer_shown["v"] = txt
+        root.focus_set()
+
+    def peer_editing():
+        try:
+            return root.focus_get() is peer_entry
+        except KeyError:
+            return False
+
+    peer_entry.bind("<Return>", apply_peer)
+    ttk.Button(top, text="Set", width=4, command=apply_peer).pack(side="left", padx=(2, 0))
+    wd_lbl = ttk.Label(top, text="no contact", foreground="#b00020")
     wd_lbl.pack(side="left", padx=12)
 
     # --- filters
@@ -773,7 +811,7 @@ def run_gui(hub: "Hub", cfg: dict):
     status_frame.pack(side="bottom", fill="x")
     batt_canvas = tk.Canvas(status_frame, width=34, height=16, highlightthickness=0, bd=0)
     batt_canvas.pack(side="left", padx=(0, 6))
-    sat_canvas = tk.Canvas(status_frame, width=70, height=16, highlightthickness=0, bd=0)
+    sat_canvas = tk.Canvas(status_frame, width=96, height=16, highlightthickness=0, bd=0)
     sat_canvas.pack(side="right", padx=(6, 0))
     status_bar = ttk.Label(status_frame, text="no node data yet", anchor="w")
     status_bar.pack(side="left", fill="x", expand=True)
@@ -786,9 +824,12 @@ def run_gui(hub: "Hub", cfg: dict):
         c.config(bg=str(root.cget("bg")))
         n = max(0, min(16, int(sat or 0)))
         on = "#2e9e46" if fix else "#e0a000"
+        pin = on if sat else "#9e9e9e"
+        # "GPS" label, coloured like the bars (a drawn symbol is too small to recognise)
+        c.create_text(1, 8, text="GPS", anchor="w", fill=pin, font=("Segoe UI", -11, "bold"))
         for i in range(16):
             h = 4 + int(10 * i / 15)
-            x = 2 + i * 4
+            x = 28 + i * 4
             c.create_rectangle(x, 15 - h, x + 2, 15, outline="", fill=on if i < n else "#d0d0d0")
 
     def draw_battery(pct):
@@ -937,6 +978,11 @@ def run_gui(hub: "Hub", cfg: dict):
         txt = hub.status_text()
         if status_bar.cget("text") != txt:
             status_bar.config(text=txt)
+        cur = hub.udp.peer if hub.udp is not None else hub.default_peer
+        curtxt = f"{cur[0]}:{cur[1]}" if cur else ""
+        if curtxt != peer_shown["v"] and not peer_editing():
+            peer_var.set(curtxt)
+            peer_shown["v"] = curtxt
         gps = hub.status.get("G") or {}
         satkey = (gps.get("SAT"), bool(gps.get("SFIX")))
         if batt_state["sat"] != satkey:
@@ -950,10 +996,10 @@ def run_gui(hub: "Hub", cfg: dict):
         if u is not None and u.last_rx is not None:
             age = int(time.monotonic() - u.last_rx)
             con = " + NET console" if hub.console_writer else ""
-            wd_lbl.config(text=f"WebDesk: UDP {age}s ago ({u.rx_count} pkts){con}",
+            wd_lbl.config(text=f"UDP {age}s ago ({u.rx_count} pkts){con}",
                           foreground="#0a7d28" if age < 120 else "#b36b00")
         elif hub.console_writer:
-            wd_lbl.config(text="WebDesk: NET console only", foreground="#b36b00")
+            wd_lbl.config(text="NET console only", foreground="#b36b00")
         root.after(100, poll)
 
     threading.Thread(target=lambda: asyncio.run(hub.run()), daemon=True).start()

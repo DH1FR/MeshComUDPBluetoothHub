@@ -36,7 +36,8 @@ Brücke:
   Nachrichten, Positionen, Quittungen und MHeard, Befehlszeile, Knöpfe für *GPS an/aus* und *Position senden*
 - Statusleiste: Batteriesymbol mit Füllstand, GPS-Status, Satelliten (Balkenanzeige), eigene Position und Sensorwerte
 - Die eigene Position und, falls der Node Sensoren hat, seine eigene Telemetrie gehen an WebDesk (`src_type: "node"`)
-- Der UDP-Port des Hubs lässt sich im Fenster ohne Neustart ändern
+- Beide UDP-Ports sind im Fenster sichtbar und ohne Neustart änderbar: **UDP port** (Port, auf dem der Hub
+  lauscht, in WebDesk „Device Port“) und **WebDesk** (IP:Port, an den der Hub sendet, in WebDesk „Listen Port“)
 - Merkt sich Node, PIN und die Adresse von WebDesk
 - Läuft unter **Windows** (WinRT) und **Linux / Raspberry Pi** (BlueZ) über [bleak](https://github.com/hbldh/bleak)
 
@@ -84,8 +85,8 @@ Hinweise:
 - WebDesk belegt UDP 1799 selbst, deshalb nutzt der Hub standardmäßig **1798**, wenn beide auf einem PC laufen.
 - Das Rufzeichen in WebDesk **muss zum Node passen**. Sonst erkennt WebDesk das Echo der eigenen Nachrichten
   nicht und zeigt ein Warndreieck.
-- Der Hub lernt die Adresse von WebDesk aus dessen Anmeldepaket und speichert sie. Bis dahin sendet er an
-  `127.0.0.1:1799` (`--peer` ändert das).
+- Der Hub lernt die Adresse von WebDesk aus dessen Paketen und speichert sie; sie steht im Feld **WebDesk** im
+  Fenster und lässt sich dort ändern. Bis zum ersten Paket sendet er an `127.0.0.1:1799` (`--peer` ändert das).
 
 ## Optionen
 

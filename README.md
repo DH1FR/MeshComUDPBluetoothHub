@@ -37,7 +37,8 @@ the gap:
   messages, positions, acks and MHeard, command line, buttons for *GPS on/off* and *Send position*
 - Status bar: battery symbol with level, GPS state, satellites (bar graph), own position and sensor values
 - The node's own position and, if it has sensors, its own telemetry are passed to WebDesk (`src_type: "node"`)
-- The hub's UDP port can be changed in the window without a restart
+- Both UDP ports are visible and editable in the window without a restart: **UDP port** (where the hub listens,
+  WebDesk's "Device Port") and **WebDesk** (IP:port where the hub sends, WebDesk's "Listen Port")
 - Remembers the node, PIN and WebDesk's address between runs
 - Runs on **Windows** (WinRT) and **Linux / Raspberry Pi** (BlueZ) via [bleak](https://github.com/hbldh/bleak)
 
@@ -85,8 +86,8 @@ Notes:
 - WebDesk binds UDP 1799 itself, so the hub uses **1798** by default when both run on one PC.
 - The callsign in WebDesk **must match the node**. Otherwise WebDesk does not recognise the
   node's echo of your own messages and shows a warning triangle.
-- The hub learns WebDesk's address from its registration packet and stores it. Until then it
-  sends to `127.0.0.1:1799` (`--peer` changes that).
+- The hub learns WebDesk's address from its packets and stores it; it is shown in the **WebDesk** field of the
+  window and can be edited there. Until the first packet it sends to `127.0.0.1:1799` (`--peer` changes that).
 
 ## Options
 
