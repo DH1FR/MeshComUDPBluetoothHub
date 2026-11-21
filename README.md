@@ -51,6 +51,8 @@ because the node must not join your network. Notes:
     It continues with the values the node reported over BLE, in the firmware's wording so WebDesk can read them: `NAME:`, `FREQ … MHz`,
     `TXPWR … dBm`, `UTC-OFF`, `...MESH`, `...Gateway`, `MAXV … V`, `[MAXHOP];text;N`, `...VIA`, `ATXT:` and `...NETConsole on (port …)`.
     A value the node did not report is left out. KISS and the node's web server are not known to the hub and are not printed.
+    Two hub-specific lines report the UDP ports WebDesk has to match: `...EXT PORT <port the hub sends to>` (WebDesk's Listen Port) and
+    `...UDP PORT <port the hub listens on>` (WebDesk's Device Port).
     Restart the hub after updating it.
   - other `--commands` are sent to the node over BLE (see limitations)
 - Optional monitor window (`--gui`): pick the node from a list of nearby nodes, live view of

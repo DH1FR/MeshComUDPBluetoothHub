@@ -517,6 +517,10 @@ class Hub:
             fw.append(f"...NETConsole on (port {console_port})")
         out = [f"Call: <{i.get('CALL')}>",
                f"...EXTUDP on ...EXT IP {peer[0] if peer else 'none'} ...NOPMOTHER off",
+               # hub-specific (the firmware has no such lines): the two UDP ports WebDesk has to match -
+               # the port the hub sends to (WebDesk's "Listen Port") and the port it listens on ("Device Port")
+               f"...EXT PORT {peer[1] if peer else 'none'}",
+               f"...UDP PORT {self.args.udp_port}",
                *fw,
                f"[hub] Node {i.get('CALL')}  FW {i.get('FWVER')}  build {self.status.get('IS1', {}).get('BDATE', '?')}"
                f"  HW id {i.get('HWID')}  country {i.get('CTRY')}",

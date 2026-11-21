@@ -50,6 +50,8 @@ Node nicht ins eigene Netz soll. Hinweise:
     Danach folgen die Werte, die der Node über BLE gemeldet hat, im Wortlaut der Firmware, damit WebDesk sie lesen kann: `NAME:`, `FREQ … MHz`,
     `TXPWR … dBm`, `UTC-OFF`, `...MESH`, `...Gateway`, `MAXV … V`, `[MAXHOP];text;N`, `...VIA`, `ATXT:` und `...NETConsole on (port …)`.
     Ein Wert, den der Node nicht gemeldet hat, fehlt. KISS und der Webserver des Nodes sind dem Hub unbekannt und werden nicht ausgegeben.
+    Zwei hub-spezifische Zeilen melden die UDP-Ports, die zu WebDesk passen müssen: `...EXT PORT <Port, an den der Hub sendet>` (Listen Port in WebDesk) und
+    `...UDP PORT <Port, auf dem der Hub lauscht>` (Device Port in WebDesk).
     Den Hub nach dem Aktualisieren neu starten.
   - andere `--Befehle` gehen per BLE an den Node (siehe Einschränkungen)
 - Optionales Monitor-Fenster (`--gui`): Node aus einer Liste der Nodes in der Nähe wählen, Live-Anzeige von
