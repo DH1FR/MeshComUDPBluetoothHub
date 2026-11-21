@@ -75,7 +75,7 @@ HELP_LINES = [
     "-- Available commands handled by the hub itself:",
     "--help           this text",
     "--mheard, --mh   heard list from the node's BLE MH frames (no lat/lon/alt)",
-    "--info           node info, built from the node's BLE status frames",
+    "--info           node info (callsign, ext UDP, LoRa, name, ...) in the firmware's wording, from the BLE status frames",
     "--pos            GPS fix, satellites, position, beacon timing",
     "-- Every other --command is sent to the node over BLE, e.g.:",
     "--gps on|off     GPS on / off",
@@ -481,7 +481,44 @@ class Hub:
         if not i:
             return ["[hub] no node data yet - wait for the node's config frames"]
         groups = ";".join(str(i.get("GCB%d" % n)) for n in range(6) if i.get("GCB%d" % n))
-        out = [f"[hub] Node {i.get('CALL')}  FW {i.get('FWVER')}  build {self.status.get('IS1', {}).get('BDATE', '?')}"
+        # Lines in the firmware's own --info format, so WebDesk's connection check can read them
+        # ("Call: <X>" and "...EXTUDP on ...EXT IP a.b.c.d ...NOPMOTHER off"). The hub IS the ext-UDP
+        # counterpart: ext UDP is always on and its target is WebDesk's address.
+        udp = getattr(self, "udp", None)
+        peer = udp.peer if udp is not None and udp.peer else self.default_peer
+        # More values in the firmware's own --info wording, taken from the node's BLE status frames. WebDesk's
+        # console helper reads them by pattern (FREQ, TXPWR, NAME, ...). Only what the node really reported is
+        # printed; KISS and the node's web server are not known to the hub, so they are left out.
+        fw = []
+        if sa and sa.get("NAME"):
+            fw.append(f"NAME: {sa.get('NAME')}")
+        if sn:
+            if sn.get("MQRG") is not None:
+                fw.append(f"FREQ {sn.get('MQRG')} MHz")
+            if sn.get("TXP") is not None:
+                fw.append(f"TXPWR {sn.get('TXP')} dBm")
+            if sn.get("UTCOF") is not None:
+                fw.append(f"UTC-OFF {sn.get('UTCOF'):g}")
+            if sn.get("MSH") is not None:
+                fw.append(f"...MESH {'on' if sn.get('MSH') else 'off'}")
+            if sn.get("GW") is not None:
+                fw.append(f"...Gateway {'on' if sn.get('GW') else 'off'}")
+        if i.get("MAXV") is not None:
+            fw.append(f"MAXV {i.get('MAXV')} V")
+        if sn1:
+            if sn1.get("MHOP") is not None:
+                fw.append(f"[MAXHOP];text;{sn1.get('MHOP')}")
+            if sn1.get("VIA") is not None:
+                fw.append(f"...VIA {'on' if sn1.get('VIA') else 'off'}")
+        if sa and sa.get("ATXT"):
+            fw.append(f"ATXT: {sa.get('ATXT')}")
+        console_port = getattr(self.args, "console_port", 0)
+        if console_port:
+            fw.append(f"...NETConsole on (port {console_port})")
+        out = [f"Call: <{i.get('CALL')}>",
+               f"...EXTUDP on ...EXT IP {peer[0] if peer else 'none'} ...NOPMOTHER off",
+               *fw,
+               f"[hub] Node {i.get('CALL')}  FW {i.get('FWVER')}  build {self.status.get('IS1', {}).get('BDATE', '?')}"
                f"  HW id {i.get('HWID')}  country {i.get('CTRY')}",
                f"[hub] Battery {i.get('BATP')} % / {i.get('BATV', 0):.2f} V (max {i.get('MAXV')} V)"
                f"  BLE {i.get('BLE')}  groups {groups}"]
