@@ -55,7 +55,8 @@ Node nicht ins eigene Netz soll. Hinweise:
     Den Hub nach dem Aktualisieren neu starten.
   - andere `--Befehle` gehen per BLE an den Node (siehe Einschränkungen)
 - Optionales Monitor-Fenster (`--gui`): Node aus einer Liste der Nodes in der Nähe wählen, Live-Anzeige von
-  Nachrichten, Positionen, Quittungen und MHeard, Befehlszeile, Knöpfe für *GPS an/aus* und *Position senden*
+  Nachrichten, Positionen, Quittungen und MHeard, Befehlszeile, Schalter für *GPS*, *Track* und *Display*, die den Zustand des Nodes zeigen (grün = an, grau = aus,
+  ? = unbekannt) und per Klick umschalten, dazu *Position senden*, *Info* und *Reboot* (fragt vorher nach)
 - Statusleiste: Batteriesymbol mit Füllstand, GPS-Status, Satelliten (Balkenanzeige), eigene Position und Sensorwerte
 - Die eigene Position und, falls der Node Sensoren hat, seine eigene Telemetrie gehen an WebDesk (`src_type: "node"`)
 - Beide UDP-Ports sind im Fenster sichtbar und ohne Neustart änderbar: **UDP port** (Port, auf dem der Hub

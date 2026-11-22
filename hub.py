@@ -80,6 +80,9 @@ HELP_LINES = [
     "-- Every other --command is sent to the node over BLE, e.g.:",
     "--gps on|off     GPS on / off",
     "--sendpos        send position now",
+    "--display on|off node display on / off",
+    "--track on|off   TRACK mode (SmartBeaconing, position to MeshCom every 5 min)",
+    "--reboot         restart the node (Bluetooth drops, the hub reconnects)",
     "--btcode NNNNNN  set BLE PIN (0 = off)",
     "-- Debug commands (sent to the node; its debug output goes to USB serial, only the echo comes back here):",
     "--loradebug on|off  LoRa RX frame debug",
@@ -535,7 +538,7 @@ class Hub:
                        f"  TX {sn.get('TXP')} dBm  UTC{sn.get('UTCOF', 0):+g}")
             out.append(f"[hub] Gateway {'on' if sn.get('GW') else 'off'}  Mesh {'on' if sn.get('MSH') else 'off'}"
                        f"  GPS {'on' if sn.get('GPS') else 'off'}  Track {'on' if sn.get('TRACK') else 'off'}"
-                       f"  Display {'on' if sn.get('DISP') else 'off'}")
+                       f"  Display {'off' if sn.get('DISP') else 'on'}")
         if sn1:
             out.append(f"[hub] Max hop {sn1.get('MHOP')}  MTU {sn1.get('MTU')}  Via {'on' if sn1.get('VIA') else 'off'}"
                        f"  TZ {sn1.get('TZ') or '-'}")
@@ -554,6 +557,22 @@ class Hub:
         return [f"[hub] GPS {'fix' if g.get('SFIX') else 'no fix'}  {g.get('SAT', 0)} sat  HDOP {g.get('HDOP')}"
                 f"  {self.fmt_pos(g.get('LAT', 0), g.get('LON', 0))}  alt {g.get('ALT', 0)} m  {g.get('DATE', '')}",
                 f"[hub] position beacon every {g.get('RATE')} s, next in {g.get('NEXT')} s"]
+
+    def switch_state(self, name):
+        """True/False/None (unknown) for the node switches gps, track, display (from the SN frame)."""
+        sn = self.status.get("SN")
+        if sn is None or self.client is None or not self.client.is_connected:
+            return None
+        if name == "display":
+            return not sn.get("DISP")        # DISP = bDisplayOff
+        return bool(sn.get({"gps": "GPS", "track": "TRACK"}[name]))
+
+    async def refresh_after_switch(self, sent):
+        """The node pushes its settings after a switch command; if that does not arrive, ask for them."""
+        await asyncio.sleep(1.5)
+        ts = self.status_ts.get("SN")
+        if (ts is None or ts < sent) and self.client and self.client.is_connected:
+            await self.send(text_frame("--info"))
 
     async def refresh_status(self):
         """Ask the node for fresh GPS (every 60 s), sensors (60 s, if any) and info (5 min)."""
@@ -597,6 +616,9 @@ class Hub:
             return
         emit("CMD", f"> {text}")
         await self.send(text_frame(text))
+        if text.strip().lower() in ("--gps on", "--gps off", "--track on", "--track off",
+                                    "--display on", "--display off"):
+            asyncio.ensure_future(self.refresh_after_switch(time.monotonic()))
 
     # ---- NET console emulation (WebDesk "NET Console", firmware net_console.cpp) ----
     # TCP, single client:  <- "NONCE: <32 hex>\r\n"  -> "<64 hex HMAC-SHA256(pw, nonce)>\r\n"
@@ -975,9 +997,43 @@ def run_gui(hub: "Hub", cfg: dict):
 
     cmd_entry.bind("<Return>", send_entry)
     ttk.Button(cmdbar, text="Send", command=send_entry).pack(side="left")
-    for label, c in (("GPS on", "--gps on"), ("GPS off", "--gps off"),
-                     ("Send position", "--sendpos"), ("Info", "--info")):
+    def do_reboot():
+        from tkinter import messagebox
+        if messagebox.askyesno("Reboot node", "Restart the node now? The Bluetooth connection drops "
+                               "and the hub reconnects by itself."):
+            run_cmd("--reboot")
+
+    _probe = tk.Button(root)
+    default_bg = _probe.cget("bg")
+    _probe.destroy()
+    # switch buttons: show the node's state (from its SN frame), a click switches it
+    toggles = {}
+
+    def toggle(name):
+        st = hub.switch_state(name)
+        run_cmd(f"--{name} {'off' if st else 'on'}")     # unknown state -> switch on
+
+    for name, label in (("gps", "GPS"), ("track", "Track"), ("display", "Display")):
+        b = tk.Button(cmdbar, text=f"{label}: ?", width=11, relief="raised", command=lambda n=name: toggle(n))
+        b.pack(side="left", padx=2)
+        toggles[name] = (b, label, "unset")
+
+    def update_toggles():
+        for name, (b, label, shown) in list(toggles.items()):
+            st = hub.switch_state(name)
+            if st == shown:
+                continue
+            toggles[name] = (b, label, st)
+            if st is None:
+                b.config(text=f"{label}: ?", bg=default_bg, fg="black", activebackground=default_bg)
+            elif st:
+                b.config(text=f"{label}: ON", bg="#2e9e46", fg="white", activebackground="#2e9e46")
+            else:
+                b.config(text=f"{label}: off", bg="#d0d0d0", fg="black", activebackground="#d0d0d0")
+
+    for label, c in (("Send position", "--sendpos"), ("Info", "--info")):
         ttk.Button(cmdbar, text=label, command=lambda c=c: run_cmd(c)).pack(side="left", padx=2)
+    ttk.Button(cmdbar, text="Reboot", command=do_reboot).pack(side="left", padx=2)
 
     scan_btn.config(command=do_scan)
     conn_btn.config(command=do_connect)
@@ -1020,6 +1076,7 @@ def run_gui(hub: "Hub", cfg: dict):
                     box.see("end")
         except queue.Empty:
             pass
+        update_toggles()
         txt = hub.status_text()
         if status_bar.cget("text") != txt:
             status_bar.config(text=txt)

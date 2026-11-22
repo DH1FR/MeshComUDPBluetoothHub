@@ -56,7 +56,8 @@ because the node must not join your network. Notes:
     Restart the hub after updating it.
   - other `--commands` are sent to the node over BLE (see limitations)
 - Optional monitor window (`--gui`): pick the node from a list of nearby nodes, live view of
-  messages, positions, acks and MHeard, command line, buttons for *GPS on/off* and *Send position*
+  messages, positions, acks and MHeard, command line, switch buttons for *GPS*, *Track* and *Display* that show the node's state (green = on, grey = off,
+  ? = unknown) and toggle it on click, plus *Send position*, *Info* and *Reboot* (asks first)
 - Status bar: battery symbol with level, GPS state, satellites (bar graph), own position and sensor values
 - The node's own position and, if it has sensors, its own telemetry are passed to WebDesk (`src_type: "node"`)
 - Both UDP ports are visible and editable in the window without a restart: **UDP port** (where the hub listens,
