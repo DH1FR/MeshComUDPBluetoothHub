@@ -254,6 +254,19 @@ class Hub:
         # 0x40/0x21 (position) and 0x91: TODO once real frames are captured
         return None
 
+    def signal_for(self, src: str):
+        """RSSI/SNR of the last radio hop of a path "ORIGIN,RELAY1,RELAY2".
+
+        The node only reports signal values in its MH frames, per station it heard directly. The values of a
+        packet belong to the LAST hop (the relay that was heard), not to the origin, so look up the path from
+        the end; for a direct packet the path is just the origin. (0, 0) if none of them is in the MH list.
+        """
+        for call in reversed([p.strip().rstrip("*") for p in src.split(",") if p.strip()]):
+            rssi, snr = self.mh.get(call, (0, 0))
+            if rssi:
+                return rssi, snr
+        return 0, 0
+
     def decode_msg(self, f: bytes):
         """LoRa APRS msg frame: 3A id(4 LE) flags SRC>DST:payload 00 hw mod fcs(2) fw hw2 sub"""
         msg_id = struct.unpack_from("<I", f, 1)[0]
@@ -267,8 +280,7 @@ class Hub:
         hw, mod = f[end + 1], f[end + 2]
         fw = f[end + 5] if len(f) > end + 5 else 0
         sub = chr(f[end + 7]) if len(f) > end + 7 and f[end + 7] not in (0, 0x7E) else "#"
-        first = src.split(",")[0]
-        rssi, snr = self.mh.get(first, (0, 0))
+        rssi, snr = self.signal_for(src)
         if f[0] == 0x21:
             return self.build_pos(src, msg, msg_id, max_hop, fw, sub, hw, mod, rssi, snr)
         if src == "response":  # console output of a "--command" sent over BLE
